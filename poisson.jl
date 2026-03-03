@@ -4,10 +4,11 @@ include("./multiscale_bases.jl");
 include("./stabilization.jl");
 
 n = 128;
-p = 0;
+p = 2;
 l = 3;
 
-lc = :green
+lc = :blue
+plt1 = Plots.plot()
 
 T₁ = Float64;
 domain = @SVector T₁[0,1,0,1];
@@ -21,8 +22,16 @@ V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁});
 Ω = get_triangulation(V);
 dΩ = Measure(Ω, 4);
 
-A = CellField(ones(n*n), Ω)
-f(x) = 2π^2*sin(π*x[1])*sin(π*x[2]);
+epsilon = min(64, n)
+repeat_dims = (Int64(n/epsilon), Int64(n/epsilon))
+a₁,b₁ = T₁.((0.1,1.0))
+using Random
+Random.seed!(1234); 
+rand_vals = rand(T₁,epsilon^2)
+vals_epsilon = repeat(reshape(a₁ .+ (b₁-a₁)*rand_vals, (epsilon, epsilon)), inner=repeat_dims)
+A = CellField(vec(vals_epsilon), Ω);
+
+f(x) = (x[1] + cos(3π*x[1]))*x[2]^3;
 aₕ(u,v) = ∫(A*∇(u)⋅∇(v))dΩ;
 lₕ(v) = ∫(f*v)dΩ;
 
@@ -42,7 +51,7 @@ end
 err₁ = Float64[];
 err₂ = Float64[];
 
-Ns = [2,4,8,16,32]
+Ns = [2,4,8,16]
 H = 1 ./ Ns
 for N=Ns
   local β = reduce(hcat, multiscale_basis(aₕ, V, domain, n, N, l, p))
@@ -60,7 +69,6 @@ for N=Ns
   println("Done N=$N")
 end
 
-# plt1 = Plots.plot()
 Plots.plot!(plt1, H, err₁, xaxis=:log2, yaxis=:log10, label="p-LOD", lc=lc, lw=2, ls=:dash); 
 Plots.scatter!(plt1, H, err₁, label="", markershape=:diamond);
 Plots.plot!(plt1, H, err₂, xaxis=:log2, yaxis=:log10, label="sp-LOD", lc=lc, lw=2); 
