@@ -1,0 +1,67 @@
+include("./triangulations.jl");
+include("./legendre.jl");
+include("./multiscale_bases.jl");
+include("./stabilization.jl");
+
+n = 128;
+p = 0;
+l = 3;
+
+lc = :green
+
+T₁ = Float64;
+domain = @SVector T₁[0,1,0,1];
+
+model_fine = CartesianDiscreteModel(domain, (n,n));
+reffe = ReferenceFE(lagrangian, T₁, 1);
+# Reference solution space
+V₀ = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}, dirichlet_tags=["boundary"]);
+# Fine scale space
+V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁});
+Ω = get_triangulation(V);
+dΩ = Measure(Ω, 4);
+
+A = CellField(ones(n*n), Ω)
+f(x) = 2π^2*sin(π*x[1])*sin(π*x[2]);
+aₕ(u,v) = ∫(A*∇(u)⋅∇(v))dΩ;
+lₕ(v) = ∫(f*v)dΩ;
+
+Kₑ, fₑ = assemble_matrix_and_vector(aₕ, lₕ, V, V);
+
+# Compute reference solution
+op = AffineFEOperator(aₕ, lₕ, V₀, V₀);
+uₑ = solve(op)
+
+function solve_ms_problem(β::AbstractMatrix{T}) where T
+  Kₘₛ = β'*Kₑ*β;
+  fₘₛ = β'*fₑ;
+  uₘₛ = Kₘₛ\fₘₛ;
+  β*uₘₛ;
+end
+
+err₁ = Float64[];
+err₂ = Float64[];
+
+Ns = [2,4,8,16,32]
+H = 1 ./ Ns
+for N=Ns
+  local β = reduce(hcat, multiscale_basis(aₕ, V, domain, n, N, l, p))
+  local γ = reduce(hcat, stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p))
+
+  uₕ₁ = FEFunction(V, solve_ms_problem(β));
+  uₕ₂ = FEFunction(V, solve_ms_problem(γ));
+
+  e₁ = uₕ₁ - uₑ
+  e₂ = uₕ₂ - uₑ
+
+  push!(err₁, √(∑(aₕ(e₁,e₁))))
+  push!(err₂, √(∑(aₕ(e₂,e₂))))
+  
+  println("Done N=$N")
+end
+
+# plt1 = Plots.plot()
+Plots.plot!(plt1, H, err₁, xaxis=:log2, yaxis=:log10, label="p-LOD", lc=lc, lw=2, ls=:dash); 
+Plots.scatter!(plt1, H, err₁, label="", markershape=:diamond);
+Plots.plot!(plt1, H, err₂, xaxis=:log2, yaxis=:log10, label="sp-LOD", lc=lc, lw=2); 
+Plots.scatter!(plt1, H, err₂, label="", markershape=:dtriangle);
