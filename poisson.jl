@@ -4,10 +4,12 @@ include("./multiscale_bases.jl");
 include("./stabilization.jl");
 
 n = 128;
-p = 2;
+p = 1;
 l = 3;
 
-lc = :blue
+lc = :red
+
+using Plots
 plt1 = Plots.plot()
 
 T₁ = Float64;
@@ -39,7 +41,7 @@ Kₑ, fₑ = assemble_matrix_and_vector(aₕ, lₕ, V, V);
 
 # Compute reference solution
 op = AffineFEOperator(aₕ, lₕ, V₀, V₀);
-uₑ = solve(op)
+uₑ = Gridap.solve(op)
 
 function solve_ms_problem(β::AbstractMatrix{T}) where T
   Kₘₛ = β'*Kₑ*β;

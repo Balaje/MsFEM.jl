@@ -1,6 +1,7 @@
 using LegendrePolynomials
 using LinearAlgebra
 using SparseArrays
+using FastGaussQuadrature
 
 """
 Function to obtain the exponents of the Legendre polynomials
@@ -8,7 +9,7 @@ Function to obtain the exponents of the Legendre polynomials
 function poly_exps(p::Int64)
   X = ones(Int64,p+1)*(0:1:p)';
   Y = (0:1:p)*ones(Int64,p+1)';
-  vec(map((a,b)->(a,b), X, Y))
+  map((a,b)->(a,b), X, Y)
 end;
 
 """
@@ -62,8 +63,21 @@ end
 Function to compute the innerproduct of the LegendrePolynomials
 """
 function λ(N::Int, p::Int)
-  t = [2/(2*(j-1)+1) for j=1:(p+1)];
+  xq, wq = gausslegendre(2p+2)
+  nq = length(xq)
+  x = [VectorValue(xq[i], xq[j]) for i=1:nq, j=1:nq]
+  w = [(wq[i]*wq[j]) for i=1:nq, j=1:nq]
   h = 1/N;
-  jac = (h/2)^2;
-  jac*diagm(repeat(vec(t*t'), outer=N*N));
+  jac = (h/2)^2
+  ps = poly_exps(p)
+  res = Float64[]
+  for i=1:lastindex(ps)
+    pᵢ = ps[i]
+    v = 0.0
+    for q=1:lastindex(x)
+      v += w[q]*Λ(x[q], pᵢ)*Λ(x[q], pᵢ)*jac
+    end
+    push!(res, v)
+  end
+  Diagonal(repeat(res, outer=N*N))
 end;

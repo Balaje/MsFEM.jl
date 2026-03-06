@@ -20,14 +20,14 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
   lmat = assemble_L_matrix(model_fine, n, N, p);
 
   # Mesh size
-  h = 1/N;
+  H = 1/N;
 
   # Hat functions on the coarse scale reference domain
   ϕₘ = ϕ(n, N);
 
   # Multiscale Bases
   β = multiscale_basis(aₕ, V, domain, n, N, l, p);  
-  βₘ = reduce(hcat, β)
+  α = deepcopy(β)
   
   elem_to_dof(i) = (p+1)^2*(i-1)+1:(p+1)^2*i
   
@@ -51,21 +51,24 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
         sol[free_dofs_fine] += (lhs\rhs)[1:length(free_dofs_fine)];
       end
     end
-    sol = iota - sol;
+    sol = iota - sol;    
 
-    # (1-Cˡ)νₖ
-    nel_on_patch = prod(size(patch_1[K]))
-    δ = nel_on_patch/((p+1)*(p+1))
-    C = droptol!(sparse(lmat'*iota), 1e-14) |> collect
-    C = (1/h^2)*C
-    Z = zero(C);
-    Z[(p+1)^2*(K-1)+1] = 1.0;
-    sol1 =  βₘ*((Z - C))*(1/δ)
-        
-    # (1-Cˡ)(ιₖ+νₖ)
-    β[K][:,1] = sol + sol1;
+    # (1-Cˡ)νₖ    
+    δ = 1/(length(patch_1[K]));    
+    C = 4/H^2*lmat'*iota
+    Z = zero(C)
+    Z[(p+1)^2*(K-1)+1] = 4; # ( = 4/H^2*λ(N,p)[1,1] );
+    D = reshape((Z - C)*δ, (p+1)*(p+1), N*N);        
+    sol1 = zeros(T, (n+1)*(n+1))
+    for i=1:lastindex(patch_1[K])  
+      el = patch_1[K][i]
+      sol1 += β[el]*D[:,el]
+    end    
+
+    # (1-Cˡ)(ιₖ+νₖ)    
+    α[K][:,1] = sol + sol1;
   end
-  β
+  α
 end;
 
 function assemble_patch_vector(rhs::AbstractVecOrMat{T}, cell_nodes::AbstractVecOrMat{U}, ndofs::Int) where {T, U}

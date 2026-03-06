@@ -7,6 +7,7 @@ include("./additional_correction.jl");
 T₁ = Float64;
 
 ## Problem data
+
 domain = @SVector T₁[0,1,0,1];
 f(x,t) = sin(π*x[1])*sin(π*x[2])*sin(t)^7;
 u₀(x) = 0.0;
@@ -33,6 +34,7 @@ vals_epsilon = repeat(reshape(a₁ .+ (b₁-a₁)*rand_vals, (epsilon, epsilon))
 A = CellField(vec(vals_epsilon), Ω);
 
 ## Weak formulation
+
 aₕ(u,v) = ∫(A*∇(u)⋅∇(v))dΩ;
 function lₕ(v,t) 
   g(x) = f(x,t)
@@ -41,6 +43,7 @@ end
 mₕ(u,v) = ∫(u*v)dΩ;
 
 ## ODE Solvers
+
 using OrdinaryDiffEqRKN, OrdinaryDiffEq
 ode_solver = RKN4()
 solver = (y,A,b) -> y .= A\b;
@@ -78,7 +81,8 @@ U = get_sol(s.u[end]);
 uₑ = FEFunction(V₀, U);
 
 ## Compute the Multiscale solution
-N = 2;
+
+N = 8;
 
 V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}); # Fine scale space
 
@@ -86,7 +90,7 @@ Mₑ = assemble_matrix(mₕ, V, V);
 Kₑ = assemble_matrix(aₕ, V, V);
 
 p = 3;
-l = 4;
+l = 5;
 j = 2;
 
 β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p);
