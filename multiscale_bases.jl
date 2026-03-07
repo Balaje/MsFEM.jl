@@ -2,17 +2,21 @@ using ProgressMeter
 using SparseArrays
 
 """
-Function to generate the multiscale basis functions.
+Function to generate the multiscale basis functions:
+   (Maier, R. 2021, SIAM Journal on Numerical Analysis 59(2), 1067-1089)
 """
 function multiscale_basis(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1,T}  
   model_fine, model_coarse = generate_triangulations(domain, n, N);
   patch_coarse = elements_in_coarse_scale_patch(reshape(1:N*N, N, N), N, l);
   patch_fine = elements_in_coarse_scale_patch(get_cell_node_ids(model_fine), N, l);
+
+  # RHS is the inner product of the Legendre Polynomials.
   O = λ(N, p)
   K = assemble_matrix(aₕ, V, V);
   L = assemble_L_matrix(model_fine, n, N, p)
-  ms_basis = [];
-  @showprogress for i=1:num_cells(model_coarse)
+
+  ms_basis = Matrix{Float64}[];
+  @showprogress "Computing pLOD basis" for i=1:num_cells(model_coarse)
     lhs, free_dofs = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
     rhs = [zeros(length(free_dofs), (p+1)*(p+1)); 
            multiscale_rhs(O, patch_coarse[i], p, i)];
@@ -24,9 +28,10 @@ function multiscale_basis(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n:
   ms_basis
 end;
 
-function multiscale_lhs(K::AbstractMatrix{T1}, L::AbstractMatrix{T1}, 
-                        patch_coarse::AbstractVecOrMat{T2}, patch_fine::AbstractVecOrMat{T3},
-                        p::Int) where {T1, T2, T3}
+"""
+Function to generate the LHS of the saddle point problem to compute the canonical multiscale bases.
+"""
+function multiscale_lhs(K::AbstractMatrix{T1}, L::AbstractMatrix{T1}, patch_coarse::AbstractVecOrMat{T2}, patch_fine::AbstractVecOrMat{T3}, p::Int) where {T1, T2, T3}
 
   elem_to_dof(i) = (p+1)^2*(i-1)+1:(p+1)^2*i
   
@@ -44,6 +49,9 @@ function multiscale_lhs(K::AbstractMatrix{T1}, L::AbstractMatrix{T1},
   LHS, I_p
 end;
 
+"""
+Function to generate the RHS of the saddle point problem to compute the canonical multiscale bases.
+"""
 function multiscale_rhs(O::AbstractMatrix{T1}, patch_coarse::AbstractVecOrMat{T2}, p::Int, i::Int) where {T1, T2}
   elem_to_dof(i) = (p+1)^2*(i-1)+1:(p+1)^2*i
   J_p = reduce(vcat, map(elem_to_dof, vec(patch_coarse)))

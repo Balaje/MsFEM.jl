@@ -2,6 +2,7 @@ include("./triangulations.jl");
 include("./legendre.jl");
 include("./multiscale_bases.jl");
 include("./stabilization.jl");
+include("./additional_correction.jl");
 
 N = 16;
 n = 128;
@@ -29,5 +30,6 @@ A = CellField(vec(vals_epsilon), Ω);
 
 aₕ(u,v) = ∫(A*∇(u)⋅∇(v))dΩ;
 
-β = reduce(hcat, multiscale_basis(aₕ, V, domain, n, N, l, p));
-γ = reduce(hcat, stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p));
+β = multiscale_basis(aₕ, V, domain, n, N, l, p);
+γ = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p);
+δ = additional_correction_bases(γ, 1, aₕ, V, domain, n, N, l, p);

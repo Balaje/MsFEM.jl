@@ -5,7 +5,7 @@ include("./stabilization.jl");
 
 n = 128;
 p = 1;
-l = 3;
+l = 1;
 
 lc = :red
 

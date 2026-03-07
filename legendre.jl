@@ -29,7 +29,7 @@ function Λ(n::Int, N::Int, p::Int)
   Ω = get_triangulation(V);
   dΩ = Measure(Ω, 2p+2);
   P = poly_exps(p)
-  L = [];
+  L = Vector{Float64}[];
   for pᵢ in P
     λ(x) = Λ(x, pᵢ);
     push!(L, assemble_vector(v->∫(λ*v)dΩ, V))
