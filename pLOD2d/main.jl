@@ -2,12 +2,12 @@ using pLOD2d
 using StaticArrays
 using Gridap
 
-N = 16;
+N = 8;
 n = 128;
-l = 2;
+l = 1;
 p = 1;
 
-T₁ = Float64;
+T₁ = Float32;
 
 domain = @SVector T₁[0,1,0,1];
 model_fine, model_coarse = generate_triangulations(domain, n, N);

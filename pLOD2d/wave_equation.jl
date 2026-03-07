@@ -2,12 +2,12 @@ using pLOD2d
 using StaticArrays
 using Gridap
 
-T₁ = Float64;
+T₁ = Float32;
 
 ## Problem data
 
 domain = @SVector T₁[0,1,0,1];
-f(x,t) = sin(π*x[1])*sin(π*x[2])*sin(t)^7;
+f(x,t) = T₁(sin(π*x[1])*sin(π*x[2])*sin(t)^7);
 u₀(x) = 0.0;
 uₜ₀(x) = 0.0;
 tf = 1.0;
@@ -80,16 +80,16 @@ uₑ = FEFunction(V₀, U);
 
 ## Compute the Multiscale solution
 
-N = 8;
+N = 4;
 
 V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}); # Fine scale space
 
 Mₑ = assemble_matrix(mₕ, V, V);
 Kₑ = assemble_matrix(aₕ, V, V);
 
-p = 3;
-l = 5;
-j = 2;
+p = 1;
+l = 1;
+j = 1;
 
 β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p);
 δ = additional_correction_bases(β, j, aₕ, V, domain, n, N, l, p);

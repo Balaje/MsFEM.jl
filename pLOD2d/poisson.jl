@@ -3,7 +3,7 @@ using StaticArrays
 using Gridap
 
 n = 128;
-p = 1;
+p = 3;
 l = 1;
 
 lc = :red
@@ -24,7 +24,7 @@ V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁});
 dΩ = Measure(Ω, 4);
 
 epsilon = min(64, n)
-repeat_dims = (Int64(n/epsilon), Int64(n/epsilon))
+repeat_dims = (Int(n/epsilon), Int(n/epsilon))
 a₁,b₁ = T₁.((0.1,1.0))
 using Random
 Random.seed!(1234); 
@@ -32,7 +32,7 @@ rand_vals = rand(T₁,epsilon^2)
 vals_epsilon = repeat(reshape(a₁ .+ (b₁-a₁)*rand_vals, (epsilon, epsilon)), inner=repeat_dims)
 A = CellField(vec(vals_epsilon), Ω);
 
-f(x) = (x[1] + cos(3π*x[1]))*x[2]^3;
+f(x) = T₁((x[1] + cos(3π*x[1]))*x[2]^3);
 aₕ(u,v) = ∫(A*∇(u)⋅∇(v))dΩ;
 lₕ(v) = ∫(f*v)dΩ;
 
@@ -40,7 +40,7 @@ Kₑ, fₑ = assemble_matrix_and_vector(aₕ, lₕ, V, V);
 
 # Compute reference solution
 op = AffineFEOperator(aₕ, lₕ, V₀, V₀);
-uₑ = Gridap.solve(op)
+uₑ = FEFunction(V₀, op.op.matrix\op.op.vector);
 
 function solve_ms_problem(β::AbstractMatrix{T}) where T
   Kₘₛ = β'*Kₑ*β;
@@ -49,8 +49,8 @@ function solve_ms_problem(β::AbstractMatrix{T}) where T
   β*uₘₛ;
 end
 
-err₁ = Float64[];
-err₂ = Float64[];
+err₁ = T₁[];
+err₂ = T₁[];
 
 Ns = [2,4,8,16]
 H = 1 ./ Ns

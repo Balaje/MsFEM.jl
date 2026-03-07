@@ -21,7 +21,7 @@ Function to compute the stabilization of the multiscale bases:
 
 Modifies the basis corresponding to the constant Legendre polynomial Λ₀,ₖ
 """
-function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1,T}  
+function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T<:Real}  
   
   model_fine, model_coarse = generate_triangulations(domain, n, N);    
 
@@ -39,13 +39,14 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
   
   # Stiffness and the rectangular matrix
   stima = assemble_matrix(aₕ, V, V);
-  lmat = assemble_rectangular_matrix(model_fine, n, N, p);
+  lmat = assemble_rectangular_matrix(domain, n, N, p);
 
   # Mesh size
-  H = 1/N;
+  H = T(1/N);
 
   # Hat functions on the coarse scale reference domain
-  ϕₘ = ϕ(n, N);
+  ref_domain = @SVector T[-1,1,-1,1]
+  ϕₘ = ϕ(ref_domain, n, N);
 
   # Multiscale Bases
   β = multiscale_basis(aₕ, V, domain, n, N, l, p);  
@@ -59,7 +60,7 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
     patch_1_cells = split_patch(patch_1[K])   
 
     ## Compute ιₖ
-    iota_ref = ι(n, N, size(patch_1_cells))
+    iota_ref = ι(ref_domain, n, N, size(patch_1_cells))
     iota = assemble_patch_vector(iota_ref, patch_1_fine[K], (n+1)*(n+1))    
 
     ## Compute Cˡιₖ
@@ -101,11 +102,11 @@ end;
 """
 Function to assemble the vector (rhs) on the cell nodes (cell_nodes) and return a vector on the fine scale discretization (ndofs)
 """
-function assemble_patch_vector(rhs::AbstractVecOrMat{T}, cell_nodes::AbstractVecOrMat{U}, ndofs::Int) where {T, U}
+function assemble_patch_vector(rhs::AbstractVecOrMat{T}, cell_nodes::AbstractVecOrMat{U}, ndofs::Int) where {T<:Vector{<:Real}, U<:Vector{<:Integer}}
   m, n = size(cell_nodes)
   nz_vals = 4*m*n
   Is = Vector{Int}(undef, nz_vals);
-  Vs = Vector{Float64}(undef, nz_vals);
+  Vs = T(undef, nz_vals);
   ct = 1
   for i=1:lastindex(cell_nodes)
     C = cell_nodes[i]
@@ -124,16 +125,17 @@ end
 Function to assemble the matrix corresponding to the bilinear form (aₕ) on the cell nodes (cell_node_ids). 
 Also requires the fine scale cells (cell) and the background fine scale space (V).
 """
-function assemble_patch_matrix(aₕ::Function, V::FESpace, cell_node_ids::AbstractVecOrMat{T}, cells::AbstractVecOrMat{U}) where {T,U}
+function assemble_patch_matrix(aₕ::Function, V::FESpace, cell_node_ids::AbstractVecOrMat{T}, cells::AbstractVecOrMat{U}) where {T<:Vector{<:Integer}, U<:Integer}
   b₀ = get_fe_basis(V);
   b = get_trial_fe_basis(V);
   Ω = get_triangulation(V);
   Ks = aₕ(b, b₀)[Ω];
+  W = eltype(first(Ks))
   m, n = size(cell_node_ids);
   nz_vals = 4*4*m*n;
-  Is = Vector{Int}(undef, nz_vals);
-  Js = Vector{Int}(undef, nz_vals);
-  Vs = Vector{Float64}(undef, nz_vals);
+  Is = T(undef, nz_vals);
+  Js = T(undef, nz_vals);
+  Vs = Vector{W}(undef, nz_vals);
   ct = 1;
   for i=1:m*n
     C = cell_node_ids[i]
@@ -152,7 +154,7 @@ end
 """
 Nodal basis functions on the reference square (-1,1)²
 """
-function ϕ(x::VectorValue{2, T}) where T
+function ϕ(x::VectorValue{2, T}) where T<:Real
   ξ, η = x
   @SVector[0.25*(1+ξ)*(1+η), 0.25*(1-ξ)*(1+η), 0.25*(1+ξ)*(1-η), 0.25*(1-ξ)*(1-η)];
 end;
@@ -160,9 +162,9 @@ end;
 """
 Reference coarse-scale nodal basis on the fine-scale nodes contained inside the coarse elements.
 """
-function ϕ(n::Int, N::Int)
+function ϕ(domain::SVector{4,T}, n::Int, N::Int) where T<:Real
   a = ceil(Int, n/N)
-  model = CartesianDiscreteModel((-1, 1, -1, 1), (a, a))
+  model = CartesianDiscreteModel(domain, (a, a))
   cell_coords = get_cell_coordinates(model)
   ϕᵢ = map(Broadcasting(ϕ), cell_coords)
   @inline get_ith_basis(X, i) = map(getindex, X, Fill(i, size(X)))
@@ -173,7 +175,7 @@ end
 """
 Function to compute the reference ι(x) function as a sum of nodal basis functions corresponding to the interior nodes.
 """
-function ι(X::AbstractVecOrMat{T}, patch_size::Tuple{Int, Int}) where T
+function ι(X::AbstractVecOrMat{T}, patch_size::NTuple{2, Int}) where T
   if(patch_size == (1,1))
     return [X[1,1] X[1,2]; X[2,1] X[2,2]]
   elseif(patch_size == (2,1))
@@ -193,8 +195,8 @@ end
 """
 The reference 1-patch function ι(x) on the coarse scale. The function is evaluated on the fine scale.
 """
-function ι(n::Int, N::Int, patch_size::Tuple{Int, Int})
-  X = ϕ(n, N)
+function ι(domain::SVector{4,T}, n::Int, N::Int, patch_size::NTuple{2, Int}) where T<:Real
+  X = ϕ(domain, n, N)
   ι(X, patch_size)
 end
 

@@ -17,7 +17,7 @@ Function to compute the additional correction bases for time dependent problems:
 
 Appends j-levels of corrections to the given multiscale basis β.
 """
-function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T, U}  
+function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T<:Real, U<:AbstractMatrix{<:Real}}  
   model_fine, model_coarse = generate_triangulations(domain, n, N);
 
   # Patch Connectivity info
@@ -30,14 +30,14 @@ function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function,
 
   K = assemble_matrix(aₕ, V, V);
   M = assemble_matrix((u,v)->∫(u*v)dΩ, V, V);
-  L = assemble_rectangular_matrix(model_fine, n, N, p)  
+  L = assemble_rectangular_matrix(domain, n, N, p)  
 
   elem_to_dof(i) = (p+1)^2*(i-1)+1:(p+1)^2*i
 
   ms_basis = [β];
   @showprogress for j=1:ntimes
     βⱼ = ms_basis[j]
-    solⱼ = [];    
+    solⱼ = U[];    
     @showprogress "Computing additional corrections bases" for i=1:num_cells(model_coarse)
       # Same LHS as the multiscale basis      
       lhs, I_p = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
