@@ -41,8 +41,9 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
   stima = assemble_matrix(aₕ, V, V);
   lmat = assemble_rectangular_matrix(domain, n, N, p);
 
-  # Mesh size
-  H = T(1/N);
+  # Mesh size  
+  hx = (domain[2]-domain[1])/N;
+  hy = (domain[4]-domain[3])/N;
 
   # Hat functions on the coarse scale reference domain
   ref_domain = @SVector T[-1,1,-1,1]
@@ -83,9 +84,9 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
 
     # Compute (1-Cˡ)νₖ    
     δ = 1/(length(patch_1[K]));    
-    C = 4/H^2*lmat'*iota
+    C = 2/hx*2/hy*lmat'*iota
     Z = zero(C)
-    Z[(p+1)^2*(K-1)+1] = 4; # ( = 4/H^2*λ(N,p)[1,1] );
+    Z[(p+1)^2*(K-1)+1] = 4; # ( = 2/hx*2/hy*λ(N,p)[1,1] );
     D = reshape((Z - C)*δ, (p+1)*(p+1), N*N);        
     sol1 = zeros(T, (n+1)*(n+1))
     for i=1:lastindex(patch_1[K])  

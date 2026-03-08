@@ -21,7 +21,7 @@ function multiscale_basis(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n:
   patch_fine = elements_in_coarse_scale_patch(get_cell_node_ids(model_fine), N, l);
 
   # RHS is the inner product of the Legendre Polynomials.
-  O = assemble_legendre_mass_matrix(N, p, T(0))
+  O = assemble_legendre_mass_matrix(domain, N, p)
   K = assemble_matrix(aₕ, V, V);
   L = assemble_rectangular_matrix(domain, n, N, p)
 

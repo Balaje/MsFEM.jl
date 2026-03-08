@@ -44,9 +44,7 @@ function reference_rectangular_matrix(domain::SVector{4,T}, n::Int, N::Int, p::I
     λ(x) = Λ(x, pᵢ);
     push!(L, assemble_vector(v->∫(λ*v)dΩ, V))
   end
-  h = T(1/N);
-  jac = (h/2)^2; # Jacobian of the transformation
-  reduce(hcat, jac*L), get_cell_node_ids(model)
+  reduce(hcat, L), get_cell_node_ids(model)
 end;
 
 """
@@ -68,16 +66,21 @@ function assemble_rectangular_matrix(domain::SVector{4,T}, n::Int, N::Int, p::In
     L[X[:,:,i], Z[i]] .= L₁[Z₂, :]
   end
 
-  L
+  hx = (domain[2]-domain[1])/N;
+  hy = (domain[4]-domain[3])/N;
+  jac = hx/2*hy/2 # Jacobian of the transformation
+
+  jac*L
 end
 
 """
 Function to compute the innerproduct of the LegendrePolynomials
 """
-function assemble_legendre_mass_matrix(N::Int, p::Int ,::T) where T<:Real
+function assemble_legendre_mass_matrix(domain::SVector{4,T}, N::Int, p::Int) where T<:Real
   t = [2/(2*T(j)-1) for j=1:p+1]
-  h = T(1/N)
-  jac = (h/2)^2
+  hx = (domain[2]-domain[1])/N;
+  hy = (domain[4]-domain[3])/N;
+  jac = hx/2*hy/2 # Jacobian of the transformation
   res = vec(t*t')
   Diagonal(repeat(res, outer=N*N))*jac
 end

@@ -7,7 +7,7 @@ n = 128;
 l = 1;
 p = 1;
 
-T₁ = Float32;
+T₁ = Float64;
 
 domain = @SVector T₁[0,1,0,1];
 model_fine, model_coarse = generate_triangulations(domain, n, N);
@@ -31,4 +31,3 @@ aₕ(u,v) = ∫(A*∇(u)⋅∇(v))dΩ;
 β = multiscale_basis(aₕ, V, domain, n, N, l, p);
 γ = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p);
 δ = additional_correction_bases(γ, 1, aₕ, V, domain, n, N, l, p);
-
