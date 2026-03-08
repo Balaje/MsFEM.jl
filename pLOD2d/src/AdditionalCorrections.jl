@@ -34,10 +34,11 @@ function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function,
 
   elem_to_dof(i) = (p+1)^2*(i-1)+1:(p+1)^2*i
 
-  ms_basis = [β];
+  ms_basis = Vector{Vector{U}}(undef, ntimes+1);
+  ms_basis[1] = β
   @showprogress for j=1:ntimes
     βⱼ = ms_basis[j]
-    solⱼ = U[];    
+    solⱼ = Vector{U}(undef, num_cells(model_coarse));    
     @showprogress "Computing additional corrections bases" for i=1:num_cells(model_coarse)
       # Same LHS as the multiscale basis      
       lhs, I_p = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
@@ -48,9 +49,9 @@ function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function,
 
       sol = zeros(T, (n+1)*(n+1), (p+1)*(p+1))
       sol[I_p, :] = (lhs\rhs)[1:length(I_p), :]
-      push!(solⱼ, sol)
+      solⱼ[i] = sol
     end
-    push!(ms_basis, solⱼ)
+    ms_basis[j+1] = solⱼ
   end
   ms_basis
 end;

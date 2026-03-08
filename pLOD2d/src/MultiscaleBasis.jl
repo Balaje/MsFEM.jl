@@ -25,14 +25,14 @@ function multiscale_basis(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n:
   K = assemble_matrix(aₕ, V, V);
   L = assemble_rectangular_matrix(domain, n, N, p)
 
-  ms_basis = Matrix{T}[];
+  ms_basis = Vector{Matrix{T}}(undef, num_cells(model_coarse))
   @showprogress "Computing pLOD basis" for i=1:num_cells(model_coarse)
     lhs, free_dofs = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
     rhs = [zeros(T, length(free_dofs), (p+1)*(p+1)); 
            multiscale_rhs(O, patch_coarse[i], p, i)];           
     sol = zeros(T, (n+1)*(n+1), (p+1)*(p+1))
-    sol[free_dofs, :] = (lhs\rhs)[1:length(free_dofs), :]
-    push!(ms_basis, sol)
+    sol[free_dofs, :] = (lhs\rhs)[1:length(free_dofs), :]        
+    ms_basis[i] = sol;
   end
   ms_basis
 end;

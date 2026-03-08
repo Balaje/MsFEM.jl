@@ -49,8 +49,8 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
   ϕₘ = ϕ(ref_domain, n, N);
 
   # Multiscale Bases
-  β = multiscale_basis(aₕ, V, domain, n, N, l, p);  
-  α = deepcopy(β);
+  β = multiscale_basis(aₕ, V, domain, n, N, l, p);    
+  α = Vector{Vector{T}}(undef, num_cells(model_coarse))
   
   elem_to_dof(i) = (p+1)^2*(i-1)+1:(p+1)^2*i
   
@@ -94,9 +94,15 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
     end    
 
     # (1-Cˡ)(ιₖ+νₖ)    
-    α[K][:,1] = sol + sol1;
+    α[K] = sol + sol1;
   end
-  α
+  
+  # Assign the 0-th order basis to the new ones
+  for i=1:num_cells(model_coarse)
+    β[i][:,1] = α[i]
+  end
+
+  β
 end;
 
 """
