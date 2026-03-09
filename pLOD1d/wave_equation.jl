@@ -46,6 +46,15 @@ using OrdinaryDiffEqRKN, OrdinaryDiffEq
 ode_solver = RKN4()
 solver = (y,A,b) -> y .= A\b;
 
+function get_sol(u)
+  n = Int64(0.5*length(u))
+  u[n+1:2n]
+end;
+
+# Time Discretization
+dt = 2^-12;
+tspan = (0.0, tf);
+
 ## Compute the reference solution
 
 V₀ = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}, dirichlet_tags=["boundary"]); # Reference solution space
@@ -63,82 +72,63 @@ function W(v, u, p, t)
   -(M⁻¹*K*u) + M⁻¹*g
 end
 
-dt = 2^-12;
-tspan = (0.0, tf);
-
 ode_prob = SecondOrderODEProblem(W, Uₜ₀, U₀, tspan, (M⁻¹, K, V₀))
 s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt);
-
-function get_sol(u)
-  n = Int64(0.5*length(u))
-  u[n+1:2n]
-end;
 
 U = get_sol(s.u[end]);
 
 uₑ = FEFunction(V₀, U);
 
 ## Compute the Multiscale solution
-
-using Plots
-# plt1 = Plots.plot()
-lc = :maroon;
-
+N = 4;
 p = 1;
-l = 5;
+l = 1;
 j = 1;
 
 V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}); # Fine scale space
 Mₑ = assemble_matrix(mₕ, V, V);
 Kₑ = assemble_matrix(aₕ, V, V);
 
-l2err₁ = T₁[];  h1err₁ = T₁[];
-l2err₂ = T₁[];  h1err₂ = T₁[];
+α = multiscale_bases(aₕ, V, domain, n, N, l, p);
+β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p);  
 
-Ns = [2, 4, 8, 16, 32, 64, 128];
-H = 1 ./ Ns
+"""
+Function to solve the Wave Equation given a basis β and the number of additional correction steps
+"""
+function solve_wave_equation_ms(β::Vector{Matrix{T}}, j::Int) where T<:Real
 
-for N=Ns  
-  α = multiscale_basis(aₕ, V, domain, n, N, l, p);
-  β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p);  
+  # Compute the additional corrections
+  γ = additional_correction_bases(β, j, aₕ, V, domain, n, N, l, p);    
   
-  function solve_wave_ms(β)    
-    δ = additional_correction_bases(β, j, aₕ, V, domain, n, N, l, p);    
-    
-    Bₘₛ = reduce(hcat, reduce(hcat, δ));
-    Kₘₛ = Bₘₛ'*Kₑ*Bₘₛ
-    Mₘₛ = Bₘₛ'*Mₑ*Bₘₛ
-    Mₘₛ⁻¹ = InverseMap(Mₘₛ; solver=solver);
-    
-    function Wₘₛ(v, u, p, t)
-      Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ  = p
-      L = assemble_vector(v->lₕ(v,t), V);
-      g = Bₘₛ'*L
-      -(Mₘₛ⁻¹*Kₘₛ*u) + Mₘₛ⁻¹*g
-    end
-    
-    U₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(u₀*v)dΩ, V))
-    Uₜ₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(uₜ₀*v)dΩ, V))
-    
-    ode_prob = SecondOrderODEProblem(Wₘₛ, Uₜ₀ₘₛ, U₀ₘₛ, tspan, (Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ))
-    s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt);
-    
-    Uₘₛ = get_sol(s.u[end]);
-    
-    FEFunction(V, Bₘₛ*Uₘₛ);
-  end;
+  Bₘₛ = reduce(hcat, reduce(hcat, γ));
+  Kₘₛ = Bₘₛ'*Kₑ*Bₘₛ
+  Mₘₛ = Bₘₛ'*Mₑ*Bₘₛ
+  Mₘₛ⁻¹ = InverseMap(Mₘₛ; solver=solver);
   
-  uₘₛ₁ = solve_wave_ms(α)
-  uₘₛ₂ = solve_wave_ms(β)
-  e₁ = uₑ - uₘₛ₁
-  e₂ = uₑ - uₘₛ₂
-  push!(h1err₁, √(∑(aₕ(e₁,e₁))));   push!(l2err₁, √(∑(mₕ(e₁,e₁))))
-  push!(h1err₂, √(∑(aₕ(e₂,e₂))));   push!(l2err₂, √(∑(mₕ(e₂,e₂))))
+  function Wₘₛ(v, u, p, t)
+    Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ  = p
+    L = assemble_vector(v->lₕ(v,t), V);
+    g = Bₘₛ'*L
+    -(Mₘₛ⁻¹*Kₘₛ*u) + Mₘₛ⁻¹*g
+  end
   
-  println("$n \t $N \t $p \t $l \t $j \t $(√(∑(mₕ(e₁,e₁)))) \t $(√(∑(aₕ(e₁,e₁)))) \t $(√(∑(mₕ(e₂,e₂)))) \t $(√(∑(aₕ(e₂,e₂))))")
-end
+  U₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(u₀*v)dΩ, V))
+  Uₜ₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(uₜ₀*v)dΩ, V))
+  
+  ode_prob = SecondOrderODEProblem(Wₘₛ, Uₜ₀ₘₛ, U₀ₘₛ, tspan, (Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ))
+  s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, 
+            save_start=false,
+            save_everystep=false,
+            save_end=true);
+  
+  Uₘₛ = get_sol(s.u[end]);
+  
+  FEFunction(V, Bₘₛ*Uₘₛ);
+end;
 
-Plots.plot!(plt1, H, h1err₁, xaxis=:log2, yaxis=:log10, label="p-LOD, l=$l, p=$p", lc=lc, lw=2, ls=:dash); 
-Plots.scatter!(plt1, H, h1err₁, label="", markershape=:diamond);
-Plots.plot!(plt1, H, h1err₂, xaxis=:log2, yaxis=:log10, label="sp-LOD, l=$l, p=$p", lc=lc, lw=2); 
-Plots.scatter!(plt1, H, h1err₂, label="", markershape=:dtriangle);
+uₘₛ₁ = solve_wave_equation_ms(α, j);
+uₘₛ₂ = solve_wave_equation_ms(β, j);
+e₁ = uₑ - uₘₛ₁;
+e₂ = uₑ - uₘₛ₂;
+
+println("$n \t $N \t $p \t $l \t $j \t $(√(∑(mₕ(e₁,e₁)))) \t $(√(∑(aₕ(e₁,e₁)))) \t $(√(∑(mₕ(e₂,e₂)))) \t $(√(∑(aₕ(e₂,e₂))))")

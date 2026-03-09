@@ -11,9 +11,9 @@ using SparseArrays
 
 using ProgressMeter
 
-using pLOD2d.Triangulations: generate_triangulations, elements_in_coarse_scale_patch, get_interior
+using pLOD2d.Triangulations: elements_in_coarse_scale_patch, get_interior
 using pLOD2d.LegendrePolynomials: assemble_rectangular_matrix
-using pLOD2d.MultiscaleBasis: multiscale_basis, multiscale_lhs, multiscale_rhs
+using pLOD2d.MultiscaleBasis: multiscale_bases, multiscale_lhs, multiscale_rhs
 
 """
 Function to compute the stabilization of the multiscale bases:
@@ -23,7 +23,7 @@ Modifies the basis corresponding to the constant Legendre polynomial Λ₀,ₖ
 """
 function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T<:Real}  
   
-  model_fine, model_coarse = generate_triangulations(domain, n, N);    
+  model_fine = CartesianDiscreteModel(domain, (n,n))
 
   # Element-level Coarse to Fine Map.
   elem_fine_nodes = elements_in_coarse_scale_patch(get_cell_node_ids(model_fine), N, 0);
@@ -50,12 +50,12 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
   ϕₘ = ϕ(ref_domain, n, N);
 
   # Multiscale Bases
-  β = multiscale_basis(aₕ, V, domain, n, N, l, p);    
-  α = Vector{Vector{T}}(undef, num_cells(model_coarse))
+  β = multiscale_bases(aₕ, V, domain, n, N, l, p);    
+  α = Vector{Vector{T}}(undef, N*N)
   
   elem_to_dof(i) = (p+1)^2*(i-1)+1:(p+1)^2*i
   
-  @showprogress "Computing stabilized-pLOD bases" for K = 1:num_cells(model_coarse)
+  @showprogress "Computing stabilized-pLOD bases" for K = 1:N*N
     sol = zeros(T, (n+1)*(n+1))   
     
     patch_1_cells = split_patch(patch_1[K])   
@@ -99,7 +99,7 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
   end
   
   # Assign the 0-th order basis to the new ones
-  for i=1:num_cells(model_coarse)
+  for i=1:N*N
     β[i][:,1] = α[i]
   end
 

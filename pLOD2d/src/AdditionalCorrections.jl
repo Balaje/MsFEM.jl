@@ -6,9 +6,9 @@ using Gridap.Geometry: get_cell_node_ids
 using ProgressMeter
 using StaticArrays
 
-using pLOD2d.Triangulations: generate_triangulations, elements_in_coarse_scale_patch, get_interior
+using pLOD2d.Triangulations: elements_in_coarse_scale_patch, get_interior
 using pLOD2d.LegendrePolynomials: assemble_rectangular_matrix
-using pLOD2d.MultiscaleBasis: multiscale_basis, multiscale_lhs, multiscale_rhs
+using pLOD2d.MultiscaleBasis: multiscale_bases, multiscale_lhs, multiscale_rhs
 using pLOD2d.StabilizedMultiscaleBasis: stabilized_multiscale_bases
 
 """
@@ -18,7 +18,7 @@ Function to compute the additional correction bases for time dependent problems:
 Appends j-levels of corrections to the given multiscale basis β.
 """
 function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T<:Real, U<:AbstractMatrix{<:Real}}  
-  model_fine, model_coarse = generate_triangulations(domain, n, N);
+  model_fine = CartesianDiscreteModel(domain, (n,n))
 
   # Patch Connectivity info
   patch_coarse = elements_in_coarse_scale_patch(reshape(1:N*N, N, N), N, l);
@@ -38,8 +38,8 @@ function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function,
   ms_basis[1] = β
   @showprogress for j=1:ntimes
     βⱼ = ms_basis[j]
-    solⱼ = Vector{U}(undef, num_cells(model_coarse));    
-    @showprogress "Computing additional corrections bases" for i=1:num_cells(model_coarse)
+    solⱼ = Vector{U}(undef, N*N);    
+    @showprogress "Computing additional corrections bases" for i=1:N*N
       # Same LHS as the multiscale basis      
       lhs, I_p = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
       J_p = reduce(vcat, map(elem_to_dof, vec(patch_coarse[i]))) # Coarse Scale patch dofs

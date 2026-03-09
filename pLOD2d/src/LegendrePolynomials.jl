@@ -11,7 +11,7 @@ using SplitApplyCombine
 using Gridap
 using Gridap.Geometry: get_cell_node_ids
 
-using pLOD2d.Triangulations: generate_triangulations, elements_in_coarse_scale_patch, get_interior
+using pLOD2d.Triangulations: elements_in_coarse_scale_patch, get_interior
 
 """
 Function to obtain the exponents of the Legendre polynomials

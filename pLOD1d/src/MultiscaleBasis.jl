@@ -8,15 +8,15 @@ using SplitApplyCombine
 
 using Gridap.Geometry: get_cell_node_ids
 
-using pLOD1d.Triangulations: generate_triangulations, elements_in_coarse_scale_patch, get_interior
+using pLOD1d.Triangulations: elements_in_coarse_scale_patch, get_interior
 using pLOD1d.LegendrePolynomials: assemble_legendre_mass_matrix, assemble_rectangular_matrix
 
 """
 Function to generate the multiscale basis functions:
    (Maier, R. 2021, SIAM Journal on Numerical Analysis 59(2), 1067-1089)
 """
-function multiscale_basis(aₕ::Function, V::FESpace, domain::SVector{2, T}, n::Int, N::Int, l::Int, p::Int) where T<:Real
-  model_fine, model_coarse = generate_triangulations(domain, n, N);
+function multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{2, T}, n::Int, N::Int, l::Int, p::Int) where T<:Real
+  model_fine = CartesianDiscreteModel(domain, (n,));
   patch_coarse = elements_in_coarse_scale_patch(1:N, N, l);
   patch_fine = elements_in_coarse_scale_patch(get_cell_node_ids(model_fine), N, l);
 
@@ -25,8 +25,8 @@ function multiscale_basis(aₕ::Function, V::FESpace, domain::SVector{2, T}, n::
   K = assemble_matrix(aₕ, V, V);
   L = assemble_rectangular_matrix(domain, n, N, p)
 
-  ms_basis = Vector{Matrix{T}}(undef, num_cells(model_coarse))
-  @showprogress "Computing pLOD basis" for i=1:num_cells(model_coarse)
+  ms_basis = Vector{Matrix{T}}(undef, N)
+  @showprogress "Computing pLOD basis" for i=1:N
     lhs, free_dofs = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
     rhs = [zeros(T, length(free_dofs), (p+1)); 
            multiscale_rhs(O, patch_coarse[i], p, i)];           

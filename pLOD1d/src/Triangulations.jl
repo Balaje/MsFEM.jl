@@ -6,13 +6,6 @@ using Gridap
 using Gridap.Geometry: get_cell_node_ids
 
 """
-Function to generate a pair of Gridap triangulations on the coarse and fine scale.
-"""
-function generate_triangulations(domain::SVector{N1,T1}, n::T2, N::T3) where {N1, T1<:Real, T2<:Int, T3<:Int}
-  CartesianDiscreteModel(domain, (n,)), CartesianDiscreteModel(domain, (N,))
-end;
-
-"""
 Function that accepts the cell-wise entries (node or elements) and returns the corresponding entries on the l-patch of the coarse scale 
 """
 function elements_in_coarse_scale_patch(cells::AbstractVector{T}, N::Int, l::Int) where T
