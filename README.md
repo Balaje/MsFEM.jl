@@ -74,7 +74,7 @@ Consider the 1D initial boundary value problem
 
 $$
 \begin{align*}
-  \frac{\partial u}{\partial t} - \frac{\partial}{\partial x}\left( A(x) \frac{\partial u}{\partial x}  \right) &= f(x, t), \quad x \in (0,1), \\; t > 0,\\
+  \frac{\partial^2 u}{\partial t^2} - \frac{\partial}{\partial x}\left( A(x) \frac{\partial u}{\partial x}  \right) &= f(x, t), \quad x \in (0,1), \\; t > 0,\\
   u &= 0, \quad x \in \\{0, 1\\}, \\; t > 0,\\
   u(x,0) &= 0, \quad x \in (0,1),\\
   \frac{\partial u}{\partial t}(x,0) &= 0, \quad x \in (0,1),
