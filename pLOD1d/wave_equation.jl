@@ -28,7 +28,7 @@ dΩ = Measure(Ω, 4);
 
 ## Diffusion Coefficient
 
-epsilon = min(64, n)
+epsilon = min(256, n)
 repeat_dims = Int64(n/epsilon)
 using Random
 Random.seed!(1234); 
