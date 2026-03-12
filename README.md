@@ -40,7 +40,7 @@ Let us consider the example of solving the following 1D BVP
 $$
 \begin{align*}
   -\frac{d}{dx}\left( A(x) \frac{du}{dx}  \right) &= f(x), \quad x \in (0,1),\\
-  u &= 0, \quad x \in \\{0, 1\\}.
+  u &= 0, \quad x \in \\{0, 1\\},
 \end{align*}
 $$
 
@@ -74,10 +74,10 @@ Consider the 1D initial boundary value problem
 
 $$
 \begin{align*}
-  \frac{\partial u}{\partial t} - \frac{\partial}{\partial x}\left( A(x) \frac{\partial u}{\partial x}  \right) &= f(x, t), \quad x \in (0,1), \; t > 0,\\
-  u &= 0, \quad x \in \\{0, 1\\}, \; t > 0,\\
+  \frac{\partial u}{\partial t} - \frac{\partial}{\partial x}\left( A(x) \frac{\partial u}{\partial x}  \right) &= f(x, t), \quad x \in (0,1), \\; t > 0,\\
+  u &= 0, \quad x \in \\{0, 1\\}, \\; t > 0,\\
   u(x,0) &= 0, \quad x \in (0,1),\\
-  \frac{\partial u}{\partial t}(x,0) &= 0, \quad x \in (0,1)
+  \frac{\partial u}{\partial t}(x,0) &= 0, \quad x \in (0,1),
 \end{align*}
 $$
 
