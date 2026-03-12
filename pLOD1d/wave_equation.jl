@@ -4,6 +4,13 @@ using Gridap
 
 T₁ = Float64
 
+parsed_args = parse_command_line()
+n = parsed_args["fine_scale"]
+N = parsed_args["coarse_scale"]
+p = parsed_args["order"]
+l = parsed_args["patch_radius"]
+j = parsed_args["correction_level"]
+
 ## Problem data
 
 domain = @SVector T₁[0,1];
@@ -14,7 +21,6 @@ tf = 1.0;
 
 ## Fine Scale Discretization
 
-n = 2048;
 model_fine = CartesianDiscreteModel(domain, (n,));
 reffe = ReferenceFE(lagrangian, T₁, 1);
 Ω = Triangulation(model_fine);
@@ -80,10 +86,6 @@ U = get_sol(s.u[end]);
 uₑ = FEFunction(V₀, U);
 
 ## Compute the Multiscale solution
-N = 4;
-p = 1;
-l = 1;
-j = 1;
 
 V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}); # Fine scale space
 Mₑ = assemble_matrix(mₕ, V, V);
@@ -96,7 +98,7 @@ Kₑ = assemble_matrix(aₕ, V, V);
 Function to solve the Wave Equation given a basis β and the number of additional correction steps
 """
 function solve_wave_equation_ms(β::Vector{Matrix{T}}, j::Int) where T<:Real
-
+  
   # Compute the additional corrections
   γ = additional_correction_bases(β, j, aₕ, V, domain, n, N, l, p);    
   
@@ -117,9 +119,9 @@ function solve_wave_equation_ms(β::Vector{Matrix{T}}, j::Int) where T<:Real
   
   ode_prob = SecondOrderODEProblem(Wₘₛ, Uₜ₀ₘₛ, U₀ₘₛ, tspan, (Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ))
   s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, 
-            save_start=false,
-            save_everystep=false,
-            save_end=true);
+  save_start=false,
+  save_everystep=false,
+  save_end=true);
   
   Uₘₛ = get_sol(s.u[end]);
   

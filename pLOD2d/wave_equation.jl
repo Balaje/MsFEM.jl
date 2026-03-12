@@ -3,6 +3,12 @@ using StaticArrays
 using Gridap
 
 T₁ = Float64
+parsed_args = parse_command_line()
+n = parsed_args["fine_scale"]
+N = parsed_args["coarse_scale"]
+p = parsed_args["order"]
+l = parsed_args["patch_radius"]
+j = parsed_args["correction_level"]
 
 ## Problem data
 
@@ -13,8 +19,6 @@ uₜ₀(x) = 0.0;
 tf = 1.0;
 
 ## Fine Scale Discretization
-
-n = 128;
 
 model_fine = CartesianDiscreteModel(domain, (n,n));
 reffe = ReferenceFE(lagrangian, T₁, 1);
@@ -81,10 +85,6 @@ U = get_sol(s.u[end]);
 uₑ = FEFunction(V₀, U);
 
 ## Compute the Multiscale solution
-N = 8;
-p = 3;
-l = 4;
-j = 2;
 
 V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}); # Fine scale space
 Mₑ = assemble_matrix(mₕ, V, V);

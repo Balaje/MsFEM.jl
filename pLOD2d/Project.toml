@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Balaje K <balaje6@gmail.com>"]
 
 [deps]
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
 FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
 Gridap = "56d4f2e9-7ea1-5844-9cf6-b9c51ca7ce8e"
@@ -15,6 +16,7 @@ SplitApplyCombine = "03a91e81-4c3e-53e1-a0a4-9c0c8f19dd66"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
+ArgParse = "1.2.0"
 BlockArrays = "1.9.3"
 FastGaussQuadrature = "1.1.0"
 Gridap = "0.19.8"

@@ -3,15 +3,20 @@ using StaticArrays
 using Gridap
 
 T₁ = Float64;
-domain = @SVector T₁[0,1,0,1];
+
+parsed_args = parse_command_line()
+n = parsed_args["fine_scale"]
+N = parsed_args["coarse_scale"]
+p = parsed_args["order"]
+l = parsed_args["patch_radius"]
+j = parsed_args["correction_level"]
 
 ## Fine scale discretization
 
-n = 128;
+domain = @SVector T₁[0,1,0,1];
 model_fine = CartesianDiscreteModel(domain, (n,n));
 reffe = ReferenceFE(lagrangian, T₁, 1);
-V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁});
-Ω = get_triangulation(V);
+Ω = Triangulation(model_fine)
 dΩ = Measure(Ω, 4);
 
 ## Diffusion Coefficient
@@ -40,10 +45,7 @@ uₑ = FEFunction(V₀, op.op.matrix\op.op.vector);
 
 ## Solve the multiscale problem
 
-N = 8
-p = 1;
-l = 1;
-
+V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁});
 Kₑ, fₑ = assemble_matrix_and_vector(aₕ, lₕ, V, V);
 
 """
