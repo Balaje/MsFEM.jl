@@ -16,7 +16,7 @@ j = parsed_args["correction_level"]
 domain = @SVector T₁[0,1];
 f(x,t) = T₁((x[1]+sin(π*x[1]))*sin(t)^7);
 u₀(x) = 0.0;
-uₜ₀(x) = 0.0;
+uₜ₀(x) = 0.0; # π*sin(π*x[1]);
 tf = 1.0;
 
 ## Fine Scale Discretization
@@ -48,13 +48,12 @@ mₕ(u,v) = ∫(u*v)dΩ;
 
 ## ODE Solvers
 
-using OrdinaryDiffEqRKN, OrdinaryDiffEq
-ode_solver = RKN4()
-solver = (y,A,b) -> y .= A\b;
+include("./set_solver.jl");
+using LinearAlgebra, LinearMaps, LinearSolve
 
 function get_sol(u)
-  n = Int64(0.5*length(u))
-  u[n+1:2n]
+  n = length(u) ÷ 2
+  u[n+1:end]
 end;
 
 # Time Discretization
@@ -67,19 +66,15 @@ V₀ = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}, diri
 M = assemble_matrix(mₕ, V₀, V₀);
 K = assemble_matrix(aₕ, V₀, V₀);
 
-using LinearMaps
 M⁻¹ = InverseMap(M; solver=solver)
 U₀ = M⁻¹*assemble_vector(v->∫(u₀*v)dΩ, V₀);
 Uₜ₀ = M⁻¹*assemble_vector(v->∫(uₜ₀*v)dΩ, V₀);
+g(t) = assemble_vector(v->lₕ(v,t), V₀)
 
-function W(v, u, p, t)
-  M⁻¹, K, V = p
-  g = assemble_vector(v->lₕ(v,t), V)
-  -(M⁻¹*K*u) + M⁻¹*g
-end
+ode_solver = RadauIIA5(linsolve=LUFactorization())
+ode_prob = set_solver(M, K, g, U₀, Uₜ₀, tspan, ode_solver)
 
-ode_prob = SecondOrderODEProblem(W, Uₜ₀, U₀, tspan, (M⁻¹, K, V₀))
-s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt);
+s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, save_start=false, save_everystep=false, save_end=true);
 
 U = get_sol(s.u[end]);
 
@@ -105,23 +100,14 @@ function solve_wave_equation_ms(β::Vector{Matrix{T}}, j::Int) where T<:Real
   Bₘₛ = reduce(hcat, reduce(hcat, γ));
   Kₘₛ = Bₘₛ'*Kₑ*Bₘₛ
   Mₘₛ = Bₘₛ'*Mₑ*Bₘₛ
-  Mₘₛ⁻¹ = InverseMap(Mₘₛ; solver=solver);
-  
-  function Wₘₛ(v, u, p, t)
-    Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ  = p
-    L = assemble_vector(v->lₕ(v,t), V);
-    g = Bₘₛ'*L
-    -(Mₘₛ⁻¹*Kₘₛ*u) + Mₘₛ⁻¹*g
-  end
-  
+  Mₘₛ⁻¹ = InverseMap(Mₘₛ; solver=solver)
   U₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(u₀*v)dΩ, V))
   Uₜ₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(uₜ₀*v)dΩ, V))
+
+  g(t) = Bₘₛ'*assemble_vector(v->lₕ(v,t), V)
   
-  ode_prob = SecondOrderODEProblem(Wₘₛ, Uₜ₀ₘₛ, U₀ₘₛ, tspan, (Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ))
-  s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, 
-  save_start=false,
-  save_everystep=false,
-  save_end=true);
+  ode_prob = set_solver(Mₘₛ, Kₘₛ, g, U₀ₘₛ, Uₜ₀ₘₛ, tspan, ode_solver)
+  s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, save_start=false, save_everystep=false, save_end=true);
   
   Uₘₛ = get_sol(s.u[end]);
   
