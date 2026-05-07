@@ -22,6 +22,7 @@ ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 SplitApplyCombine = "03a91e81-4c3e-53e1-a0a4-9c0c8f19dd66"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+TerminalLoggers = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
 
 [compat]
 ArgParse = "1.2.0"
@@ -42,3 +43,4 @@ ProgressMeter = "1.11.0"
 SparseArrays = "1.12.0"
 SplitApplyCombine = "1.2.3"
 StaticArrays = "1.9.17"
+TerminalLoggers = "0.1.7"

@@ -32,6 +32,10 @@ function parse_command_line()
     help = "Number of additional correction steps"
     arg_type = Int
     default = 0
+  "--reference_sol", "-r"
+    help = "Path to the Reference Solution"
+    arg_type = String
+    default = ""
   end
 
   return parse_args(s)

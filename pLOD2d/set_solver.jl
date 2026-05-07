@@ -33,9 +33,9 @@ function first_order_solver(M::AbstractMatrix, K::AbstractMatrix, f::Function, U
     return nothing
   end;
   function jac!(J, u, p, t)
-    copyto!(J, Kₛ)
+    J .= Kₛ
     return nothing
-  end;
+  end  
   W = ODEFunction(W!, mass_matrix=Mₛ, jac=jac!, jac_prototype=Kₛ)
-  ODEProblem(W, [Uₜ₀; U₀], tspan)
+  ODEProblem(W, [Uₜ₀; U₀], tspan)  
 end

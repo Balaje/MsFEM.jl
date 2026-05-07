@@ -1,6 +1,7 @@
 using pLOD2d
 using StaticArrays
 using Gridap
+using DelimitedFiles
 
 T₁ = Float64
 parsed_args = parse_command_line()
@@ -9,6 +10,7 @@ N = parsed_args["coarse_scale"]
 p = parsed_args["order"]
 l = parsed_args["patch_radius"]
 j = parsed_args["correction_level"]
+ref_sol = parsed_args["reference_sol"]
 
 ## Problem data
 
@@ -47,13 +49,12 @@ mₕ(u,v) = ∫(u*v)dΩ;
 
 ## ODE Solvers
 
-using OrdinaryDiffEqRKN, OrdinaryDiffEq
-ode_solver = RKN4()
-solver = (y,A,b) -> y .= A\b;
+include("./set_solver.jl");
+using LinearAlgebra, LinearMaps, LinearSolve
 
 function get_sol(u)
-  n = Int64(0.5*length(u))
-  u[n+1:2n]
+  n = length(u) ÷ 2
+  u[n+1:end]
 end;
 
 # Time Discretization
@@ -63,26 +64,39 @@ tspan = (0.0, tf);
 ## Compute the reference solution
 
 V₀ = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}, dirichlet_tags=["boundary"]); # Reference solution space
-M = assemble_matrix(mₕ, V₀, V₀);
-K = assemble_matrix(aₕ, V₀, V₀);
 
-using LinearMaps
-M⁻¹ = InverseMap(M; solver=solver)
-U₀ = M⁻¹*assemble_vector(v->∫(u₀*v)dΩ, V₀);
-Uₜ₀ = M⁻¹*assemble_vector(v->∫(uₜ₀*v)dΩ, V₀);
+using Logging: global_logger
+using TerminalLoggers: TerminalLogger
+global_logger(TerminalLogger())
 
-function W(v, u, p, t)
-  M⁻¹, K, V = p
-  g = assemble_vector(v->lₕ(v,t), V)
-  -(M⁻¹*K*u) + M⁻¹*g
+if(ref_sol == "")
+  M = assemble_matrix(mₕ, V₀, V₀);
+  K = assemble_matrix(aₕ, V₀, V₀);
+  
+  M⁻¹ = InverseMap(M; solver=solver)
+  U₀ = M⁻¹*assemble_vector(v->∫(u₀*v)dΩ, V₀);
+  Uₜ₀ = M⁻¹*assemble_vector(v->∫(uₜ₀*v)dΩ, V₀);
+  g(t) = assemble_vector(v->lₕ(v,t), V₀)
+  
+  ode_solver = RKN4()
+  ode_prob = set_solver(M, K, g, U₀, Uₜ₀, tspan, ode_solver)
+
+  s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, 
+                          save_start=false, save_everystep=false, save_end=true, 
+                          progress=true, progress_steps=1, progress_name="Reference solution",
+                          adaptive=false);
+  
+  U = get_sol(s.u[end]);
+
+  using Dates
+  open("./ref_sol_n$(n)_T$(Dates.format(now(), "yyyymmddHHMMSS")).txt", "w") do io
+    writedlm(io, U)
+  end
+else
+    U = readdlm(ref_sol, T₁)
 end
 
-ode_prob = SecondOrderODEProblem(W, Uₜ₀, U₀, tspan, (M⁻¹, K, V₀))
-s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt);
-
-U = get_sol(s.u[end]);
-
-uₑ = FEFunction(V₀, U);
+uₑ = FEFunction(V₀, vec(U));
 
 ## Compute the Multiscale solution
 
@@ -90,46 +104,38 @@ V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}); # Fine
 Mₑ = assemble_matrix(mₕ, V, V);
 Kₑ = assemble_matrix(aₕ, V, V);
 
-α = multiscale_bases(aₕ, V, domain, n, N, l, p);
 β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p);  
 
 """
 Function to solve the Wave Equation given a basis β and the number of additional correction steps
 """
 function solve_wave_equation_ms(β::Vector{Matrix{T}}, j::Int) where T<:Real
-
+  
   # Compute the additional corrections
   γ = additional_correction_bases(β, j, aₕ, V, domain, n, N, l, p);    
   
   Bₘₛ = reduce(hcat, reduce(hcat, γ));
   Kₘₛ = Bₘₛ'*Kₑ*Bₘₛ
   Mₘₛ = Bₘₛ'*Mₑ*Bₘₛ
-  Mₘₛ⁻¹ = InverseMap(Mₘₛ; solver=solver);
-  
-  function Wₘₛ(v, u, p, t)
-    Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ  = p
-    L = assemble_vector(v->lₕ(v,t), V);
-    g = Bₘₛ'*L
-    -(Mₘₛ⁻¹*Kₘₛ*u) + Mₘₛ⁻¹*g
-  end
-  
+  Mₘₛ⁻¹ = InverseMap(Mₘₛ; solver=solver);    
   U₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(u₀*v)dΩ, V))
   Uₜ₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(uₜ₀*v)dΩ, V))
+
+  g(t) = Bₘₛ'*assemble_vector(v->lₕ(v,t), V)
   
-  ode_prob = SecondOrderODEProblem(Wₘₛ, Uₜ₀ₘₛ, U₀ₘₛ, tspan, (Mₘₛ⁻¹, Kₘₛ, V, Bₘₛ))
+  ode_solver = RadauIIA5(linsolve=LUFactorization())
+  ode_prob = set_solver(Mₘₛ, Kₘₛ, g, U₀ₘₛ, Uₜ₀ₘₛ, tspan, ode_solver)
   s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, 
-            save_start=false,
-            save_everystep=false,
-            save_end=true);
+                           save_start=false, save_everystep=false, save_end=true, 
+                           progress=true, progress_steps=1, progress_name="Multiscale solution",
+                           adaptive=false);
   
   Uₘₛ = get_sol(s.u[end]);
   
   FEFunction(V, Bₘₛ*Uₘₛ);
 end;
 
-uₘₛ₁ = solve_wave_equation_ms(α, j);
-uₘₛ₂ = solve_wave_equation_ms(β, j);
-e₁ = uₑ - uₘₛ₁;
-e₂ = uₑ - uₘₛ₂;
+uₘₛ = solve_wave_equation_ms(β, j);
+e = uₑ - uₘₛ;
 
-println("$n \t $N \t $p \t $l \t $j \t $(√(∑(mₕ(e₁,e₁)))) \t $(√(∑(aₕ(e₁,e₁)))) \t $(√(∑(mₕ(e₂,e₂)))) \t $(√(∑(aₕ(e₂,e₂))))")
+println("$n \t $N \t $p \t $l \t $j \t $(√(∑(mₕ(e,e)))) \t $(√(∑(aₕ(e,e))))")
