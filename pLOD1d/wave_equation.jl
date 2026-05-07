@@ -1,15 +1,19 @@
 using pLOD1d
 using StaticArrays
 using Gridap
+using DelimitedFiles
 
 T₁ = Float64
 
 parsed_args = parse_command_line()
-n = parsed_args["fine_scale"]
-N = parsed_args["coarse_scale"]
-p = parsed_args["order"]
-l = parsed_args["patch_radius"]
-j = parsed_args["correction_level"]
+# n = parsed_args["fine_scale"]
+# N = parsed_args["coarse_scale"]
+# p = parsed_args["order"]
+# l = parsed_args["patch_radius"]
+# j = parsed_args["correction_level"]
+ref_sol = parsed_args["reference_sol"]
+
+n, N, p, l, j = 2048, 8, 2, 8, 1
 
 ## Problem data
 
@@ -57,28 +61,38 @@ function get_sol(u)
 end;
 
 # Time Discretization
-dt = 2^-12;
+dt = 2^-6
 tspan = (0.0, tf);
 
 ## Compute the reference solution
 
 V₀ = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}, dirichlet_tags=["boundary"]); # Reference solution space
-M = assemble_matrix(mₕ, V₀, V₀);
-K = assemble_matrix(aₕ, V₀, V₀);
-
-M⁻¹ = InverseMap(M; solver=solver)
-U₀ = M⁻¹*assemble_vector(v->∫(u₀*v)dΩ, V₀);
-Uₜ₀ = M⁻¹*assemble_vector(v->∫(uₜ₀*v)dΩ, V₀);
-g(t) = assemble_vector(v->lₕ(v,t), V₀)
-
 ode_solver = RadauIIA5(linsolve=LUFactorization())
-ode_prob = set_solver(M, K, g, U₀, Uₜ₀, tspan, ode_solver)
 
-s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, save_start=false, save_everystep=false, save_end=true);
+if(ref_sol == "")
+  M = assemble_matrix(mₕ, V₀, V₀);
+  K = assemble_matrix(aₕ, V₀, V₀);
 
-U = get_sol(s.u[end]);
+  M⁻¹ = InverseMap(M; solver=solver)
+  U₀ = M⁻¹*assemble_vector(v->∫(u₀*v)dΩ, V₀);
+  Uₜ₀ = M⁻¹*assemble_vector(v->∫(uₜ₀*v)dΩ, V₀);
+  g(t) = assemble_vector(v->lₕ(v,t), V₀)
 
-uₑ = FEFunction(V₀, U);
+  ode_prob = set_solver(M, K, g, U₀, Uₜ₀, tspan, ode_solver)
+
+  s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, save_start=false, save_everystep=false, save_end=true, adaptive=false);
+
+  U = get_sol(s.u[end]);
+
+  using Dates
+  open("./ref_sol_n$(n)_T$(Dates.format(now(), "yyyymmddHHMMSS")).txt", "w") do io
+    writedlm(io, U)
+  end
+else
+  U = readdlm(ref_sol, T₁)    
+end
+
+uₑ = FEFunction(V₀, vec(U));
 
 ## Compute the Multiscale solution
 
@@ -107,7 +121,7 @@ function solve_wave_equation_ms(β::Vector{Matrix{T}}, j::Int) where T<:Real
   g(t) = Bₘₛ'*assemble_vector(v->lₕ(v,t), V)
   
   ode_prob = set_solver(Mₘₛ, Kₘₛ, g, U₀ₘₛ, Uₜ₀ₘₛ, tspan, ode_solver)
-  s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, save_start=false, save_everystep=false, save_end=true);
+  s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, save_start=false, save_everystep=false, save_end=true, adaptive=false);
   
   Uₘₛ = get_sol(s.u[end]);
   
@@ -119,4 +133,4 @@ uₘₛ₂ = solve_wave_equation_ms(β, j);
 e₁ = uₑ - uₘₛ₁;
 e₂ = uₑ - uₘₛ₂;
 
-println("$n \t $N \t $p \t $l \t $j \t $(√(∑(mₕ(e₁,e₁)))) \t $(√(∑(aₕ(e₁,e₁)))) \t $(√(∑(mₕ(e₂,e₂)))) \t $(√(∑(aₕ(e₂,e₂))))")
+println("$dt \t $n \t $N \t $p \t $l \t $j \t $(√(∑(mₕ(e₁,e₁)))) \t $(√(∑(aₕ(e₁,e₁)))) \t $(√(∑(mₕ(e₂,e₂)))) \t $(√(∑(aₕ(e₂,e₂))))")

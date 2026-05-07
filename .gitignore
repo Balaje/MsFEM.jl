@@ -4,3 +4,6 @@
 *.vscode
 Manifest.toml
 scripts/
+*.txt
+*.out
+*.err

@@ -21,6 +21,7 @@ end;
 
 function first_order_solver(M::AbstractMatrix, K::AbstractMatrix, f::Function, U₀::Vector, Uₜ₀::Vector, tspan::NTuple{2,<:Real})
   Mₛ = [M 0*I; 0*I I]
+  # M⁻¹ = InverseMap(M, solver=solver)
   function W(du, u, p, t)    
     n = length(u) ÷ 2
     V = @view u[1:n]; 
@@ -29,6 +30,8 @@ function first_order_solver(M::AbstractMatrix, K::AbstractMatrix, f::Function, U
     dU = @view du[n+1:2n]  
     dU .= V
     dV .= f(t) - K*U
+    # dV .= M⁻¹*f(t) - M⁻¹*K*U
   end;
   ODEProblem(ODEFunction(W, mass_matrix=Mₛ), [Uₜ₀; U₀], tspan)
+  # ODEProblem(W, [Uₜ₀; U₀], tspan)
 end
