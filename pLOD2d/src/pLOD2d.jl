@@ -36,6 +36,10 @@ function parse_command_line()
     help = "Path to the Reference Solution"
     arg_type = String
     default = ""
+  "--output_file", "-o"
+    help = "Path to the Output File"
+    arg_type = String
+    default = ""
   end
 
   return parse_args(s)

@@ -75,4 +75,12 @@ e₃ = uₕ₃ - uₑ;
 
 d = ["$n" "$N" "$p" "$l" "$(√(∑(mₕ(e₁,e₁))))" "$(√(∑(aₕ(e₁,e₁))))" "$(√(∑(mₕ(e₂,e₂))))" "$(√(∑(aₕ(e₂,e₂))))" "$(√(∑(mₕ(e₃,e₃))))" "$(√(∑(aₕ(e₃,e₃))))"];
 c_labels = ["1/h", "1/H", "p", "l", "L²(pLOD)", "Energy(pLOD)", "L²(spLOD, [HLM25])", "Energy(spLOD, [HLM25])",  "L²(spLOD, [DHM25])", "Energy(spLOD, [DHM25])"]
-table = pretty_table(d; column_labels=c_labels)
+
+fname = parsed_args["output_file"]
+if(fname=="")
+  pretty_table(d; column_labels=c_labels)
+else
+  open("poisson2d-output-$fname.txt", "w") do io
+    pretty_table(io, d; column_labels=c_labels)
+  end
+end
