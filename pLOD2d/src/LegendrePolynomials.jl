@@ -33,7 +33,7 @@ end;
 Function to generate the rectangular matrix using the reference square [-1,1]²
 """
 function reference_rectangular_matrix(domain::SVector{4,T}, n::Int, N::Int, p::Int) where T<:Real
-  a = ceil(Int, n/N);
+  a = n ÷ N
   model = CartesianDiscreteModel(domain, (a, a))
   V = FESpace(model, ReferenceFE(lagrangian, T, 1), conformity=:H1; vector_type=Vector{T})
   Ω = get_triangulation(V);
@@ -65,12 +65,9 @@ function assemble_rectangular_matrix(domain::SVector{4,T}, n::Int, N::Int, p::In
   for i=1:N*N
     L[X[:,:,i], Z[i]] .= L₁[Z₂, :]
   end
-
   hx = (domain[2]-domain[1])/N;
-  hy = (domain[4]-domain[3])/N;
-  jac = hx/2*hy/2 # Jacobian of the transformation
-
-  jac*L
+  hy = (domain[4]-domain[3])/N;  
+  L*hx/2*hy/2
 end
 
 """
@@ -79,10 +76,9 @@ Function to compute the innerproduct of the LegendrePolynomials
 function assemble_legendre_mass_matrix(domain::SVector{4,T}, N::Int, p::Int) where T<:Real
   t = [2/(2*T(j)-1) for j=1:p+1]
   hx = (domain[2]-domain[1])/N;
-  hy = (domain[4]-domain[3])/N;
-  jac = hx/2*hy/2 # Jacobian of the transformation
+  hy = (domain[4]-domain[3])/N;  
   res = vec(t*t')
-  Diagonal(repeat(res, outer=N*N))*jac
+  Diagonal(repeat(res, outer=N*N))*hx/2*hy/2
 end
 
 end

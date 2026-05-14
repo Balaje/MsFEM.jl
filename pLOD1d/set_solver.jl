@@ -3,7 +3,7 @@
 #### #### #### #### #### #### #### #### #### #### #### 
 
 using OrdinaryDiffEq, OrdinaryDiffEqCore
-using OrdinaryDiffEqRKN, OrdinaryDiffEqFIRK
+using OrdinaryDiffEqRKN, OrdinaryDiffEqFIRK, OrdinaryDiffEqRosenbrock
 
 function set_solver(M::AbstractMatrix{T}, K::AbstractMatrix{U}, f::Function, U₀::Vector, Uₜ₀::Vector, tspan::NTuple{2,<:Real}, solver::F)  where {T<:Real, U<:Real, F<:OrdinaryDiffEqCore.OrdinaryDiffEqAlgorithm}
   (solver == RKN4()) ? second_order_solver(M, K, f, U₀, Uₜ₀, tspan) : first_order_solver(M, K, f, U₀, Uₜ₀, tspan)
@@ -35,7 +35,7 @@ function first_order_solver(M::AbstractMatrix, K::AbstractMatrix, f::Function, U
   function jac!(J, u, p, t)
     copyto!(J, Kₛ)
     return nothing
-  end;
+  end;    
   W = ODEFunction(W!, mass_matrix=Mₛ, jac=jac!, jac_prototype=Kₛ)
   ODEProblem(W, [Uₜ₀; U₀], tspan)
 end

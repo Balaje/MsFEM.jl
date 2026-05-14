@@ -13,9 +13,10 @@ using pLOD2d.LegendrePolynomials: assemble_legendre_mass_matrix, assemble_rectan
 
 """
 Function to generate the multiscale basis functions:
-   (Maier, R. 2021, SIAM Journal on Numerical Analysis 59(2), 1067-1089)
+
+1. Maier, R. 2021, SIAM Journal on Numerical Analysis 59(2), 1067-1089
 """
-function multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T<:Real}  
+function multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int; show_progress=true) where {N1, T<:Real}  
   model_fine = CartesianDiscreteModel(domain, (n,n))
   patch_coarse = elements_in_coarse_scale_patch(reshape(1:N*N, N, N), N, l);
   patch_fine = elements_in_coarse_scale_patch(get_cell_node_ids(model_fine), N, l);
@@ -26,7 +27,7 @@ function multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n:
   L = assemble_rectangular_matrix(domain, n, N, p)
 
   ms_basis = Vector{Matrix{T}}(undef, N*N)
-  @showprogress "Computing pLOD basis" for i=1:N*N
+  @showprogress enabled=show_progress "Computing pLOD basis" for i=1:N*N
     lhs, free_dofs = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
     rhs = [zeros(T, length(free_dofs), (p+1)*(p+1)); 
            multiscale_rhs(O, patch_coarse[i], p, i)];           

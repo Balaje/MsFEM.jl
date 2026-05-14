@@ -49,7 +49,7 @@ V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁});
 Kₑ, fₑ = assemble_matrix_and_vector(aₕ, lₕ, V, V);
 
 """
-Function to solve the Poisson problem using the multiscale method
+Function to solve the Poisson problem given a basis
 """
 function solve_poisson_ms(β::Vector{Matrix{T}}) where T<:Real
   Bₘₛ = reduce(hcat, β)
@@ -57,15 +57,22 @@ function solve_poisson_ms(β::Vector{Matrix{T}}) where T<:Real
   fₘₛ = Bₘₛ'*fₑ;
   uₘₛ = Kₘₛ\fₘₛ;
   Bₘₛ*uₘₛ;
-end
+end;
 
-β = multiscale_bases(aₕ, V, domain, n, N, l, p)
-γ = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p)
+using PrettyTables
+
+β = multiscale_bases(aₕ, V, domain, n, N, l, p; show_progress=false);
+γ = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p; strategy=HLM25(), show_progress=false);
+δ = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p; strategy=DHM25(), show_progress=false);
 
 uₕ₁ = FEFunction(V, solve_poisson_ms(β));
 uₕ₂ = FEFunction(V, solve_poisson_ms(γ));
+uₕ₃ = FEFunction(V, solve_poisson_ms(δ));
 
-e₁ = uₕ₁ - uₑ
-e₂ = uₕ₂ - uₑ
+e₁ = uₕ₁ - uₑ;
+e₂ = uₕ₂ - uₑ;
+e₃ = uₕ₃ - uₑ;
 
-println("$n \t $N \t $p \t $l \t $(√(∑(mₕ(e₁,e₁)))) \t $(√(∑(aₕ(e₁,e₁)))) \t $(√(∑(mₕ(e₂,e₂)))) \t $(√(∑(aₕ(e₂,e₂))))")
+d = ["$n" "$N" "$p" "$l" "$(√(∑(mₕ(e₁,e₁))))" "$(√(∑(aₕ(e₁,e₁))))" "$(√(∑(mₕ(e₂,e₂))))" "$(√(∑(aₕ(e₂,e₂))))" "$(√(∑(mₕ(e₃,e₃))))" "$(√(∑(aₕ(e₃,e₃))))"];
+c_labels = ["1/h", "1/H", "p", "l", "L²(pLOD)", "Energy(pLOD)", "L²(spLOD, [HLM25])", "Energy(spLOD, [HLM25])",  "L²(spLOD, [DHM25])", "Energy(spLOD, [DHM25])"]
+table = pretty_table(d; column_labels=c_labels)

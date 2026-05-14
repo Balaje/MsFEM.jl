@@ -9,15 +9,16 @@ using StaticArrays
 using pLOD2d.Triangulations: elements_in_coarse_scale_patch, get_interior
 using pLOD2d.LegendrePolynomials: assemble_rectangular_matrix
 using pLOD2d.MultiscaleBasis: multiscale_bases, multiscale_lhs, multiscale_rhs
-using pLOD2d.StabilizedMultiscaleBasis: stabilized_multiscale_bases
+using pLOD2d.StabilizedMultiscaleBasis: stabilized_multiscale_bases, DHM25, HLM25
 
 """
 Function to compute the additional correction bases for time dependent problems:
-  (Kalyanaraman, B., Krumbiegel, F., Maier, R., & Wang, S. (2025), arXiv [Math.NA])
+
+1. Kalyanaraman, B., Krumbiegel, F., Maier, R., & Wang, S. (2025), arXiv [Math.NA])
 
 Appends j-levels of corrections to the given multiscale basis β.
 """
-function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T<:Real, U<:AbstractMatrix{<:Real}}  
+function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int; show_progress=true) where {N1, T<:Real, U<:AbstractMatrix{<:Real}}  
   model_fine = CartesianDiscreteModel(domain, (n,n))
 
   # Patch Connectivity info
@@ -36,10 +37,10 @@ function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function,
 
   ms_basis = Vector{Vector{U}}(undef, ntimes+1);
   ms_basis[1] = β
-  @showprogress for j=1:ntimes
+  @showprogress enabled=show_progress for j=1:ntimes
     βⱼ = ms_basis[j]
     solⱼ = Vector{U}(undef, N*N);    
-    @showprogress "Computing additional corrections bases" for i=1:N*N
+    @showprogress enabled=show_progress "Computing additional corrections bases [Level $j]" for i=1:N*N
       # Same LHS as the multiscale basis      
       lhs, I_p = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
       J_p = reduce(vcat, map(elem_to_dof, vec(patch_coarse[i]))) # Coarse Scale patch dofs
@@ -57,7 +58,7 @@ function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function,
 end;
 
 """
-Function to obtain the additional corrections to the canonical basis
+Function to obtain the additional corrections applied to the canonical basis.
 """
 function additional_correction_bases(ntimes::Int, aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T}  
   β = multiscale_bases(aₕ, V, domain, n, N, l, p)
@@ -65,10 +66,12 @@ function additional_correction_bases(ntimes::Int, aₕ::Function, V::FESpace, do
 end
 
 """
-Function to obtain the additional corrections for the stabilized basis
+Function to obtain the additional corrections applied to the stabilized basis
+
+See `additional_correction_bases` and `stabilized_multiscale_bases` for more information.
 """
-function stabilized_additional_correction_bases(ntimes::Int, aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T}  
-  β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p)
+function stabilized_additional_correction_bases(ntimes::Int, aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int; strategy=DHM25(), show_progress=true) where {N1, T}  
+  β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p; strategy=strategy, show_progress=show_progress)
   additional_correction_bases(β, ntimes, aₕ, V, domain, n, N, l, p)
 end
 

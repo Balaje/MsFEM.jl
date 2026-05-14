@@ -104,8 +104,6 @@ V = FESpace(model_fine, reffe, conformity=:H1, vector_type=Vector{T₁}); # Fine
 Mₑ = assemble_matrix(mₕ, V, V);
 Kₑ = assemble_matrix(aₕ, V, V);
 
-β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p);  
-
 """
 Function to solve the Wave Equation given a basis β and the number of additional correction steps
 """
@@ -122,8 +120,7 @@ function solve_wave_equation_ms(β::Vector{Matrix{T}}, j::Int) where T<:Real
   Uₜ₀ₘₛ = Mₘₛ⁻¹*(Bₘₛ'*assemble_vector(v->∫(uₜ₀*v)dΩ, V))
 
   g(t) = Bₘₛ'*assemble_vector(v->lₕ(v,t), V)
-  
-  ode_solver = RadauIIA5(linsolve=LUFactorization())
+  ode_solver = Rodas5P(autodiff=AutoFiniteDiff(), linsolve=LUFactorization())
   ode_prob = set_solver(Mₘₛ, Kₘₛ, g, U₀ₘₛ, Uₜ₀ₘₛ, tspan, ode_solver)
   s = OrdinaryDiffEq.solve(ode_prob, ode_solver, dt = dt, 
                            save_start=false, save_everystep=false, save_end=true, 
@@ -131,11 +128,19 @@ function solve_wave_equation_ms(β::Vector{Matrix{T}}, j::Int) where T<:Real
                            adaptive=false);
   
   Uₘₛ = get_sol(s.u[end]);
+
+  println("Solver: $(ode_solver |> typeof |> nameof)")
+  println("ReturnCode: $(s.retcode)")
   
   FEFunction(V, Bₘₛ*Uₘₛ);
 end;
 
+stab_strategy = HLM25();
+β = stabilized_multiscale_bases(aₕ, V, domain, n, N, l, p; strategy=stab_strategy);  
 uₘₛ = solve_wave_equation_ms(β, j);
 e = uₑ - uₘₛ;
 
-println("$n \t $N \t $p \t $l \t $j \t $(√(∑(mₕ(e,e)))) \t $(√(∑(aₕ(e,e))))")
+using PrettyTables
+c_labels = ["1/h", "1/H", "p", "l", "j", "L²(spLOD, [$(stab_strategy |> typeof |> nameof)])", "Energy(spLOD, [$(stab_strategy |> typeof |> nameof)])"]
+d = ["$n" "$N" "$p" "$l" "$j" "$(√(∑(mₕ(e,e))))" "$(√(∑(aₕ(e,e))))"]
+pretty_table(d; column_labels=c_labels)

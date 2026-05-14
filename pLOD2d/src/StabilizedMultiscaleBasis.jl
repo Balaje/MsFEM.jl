@@ -12,16 +12,28 @@ using SparseArrays
 using ProgressMeter
 
 using pLOD2d.Triangulations: elements_in_coarse_scale_patch, get_interior
-using pLOD2d.LegendrePolynomials: assemble_rectangular_matrix
+using pLOD2d.LegendrePolynomials: assemble_rectangular_matrix, assemble_legendre_mass_matrix
 using pLOD2d.MultiscaleBasis: multiscale_bases, multiscale_lhs, multiscale_rhs
 
+abstract type StabilizationStrategy end
+struct DHM25 <: StabilizationStrategy end
+struct HLM25 <: StabilizationStrategy end
+
 """
-Function to compute the stabilization of the multiscale bases:
-  (Dong, Z., Hauck, M., & Maier, R. (2023), SIAM Journal on Numerical Analysis, 61(4), 1918–1937)
+Function to compute the stabilization of the multiscale bases using two different strategies:
+
+1.  Dong, Z., Hauck, M., & Maier, R. (2023), SIAM Journal on Numerical Analysis, 61(4), 1918–1937
+2.  Hauck, M., Lozinski, A. and Maier, R. (2026), ESAIM: Mathematical Modelling and Numerical Analysis, 60(1), pp.445-471
+
+The strategy can be chosen using keyword argument in the function. 
+
+    `stabilized_multiscale_bases( ;strategy=)`
+
+To use [1], set `strategy=DHM25()` and to use [2], set `strategy=HLM25()`.
 
 Modifies the basis corresponding to the constant Legendre polynomial Λ₀,ₖ
 """
-function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int) where {N1, T<:Real}  
+function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector{N1, T}, n::Int, N::Int, l::Int, p::Int; strategy=DHM25(), show_progress=true) where {N1, T<:Real}  
   
   model_fine = CartesianDiscreteModel(domain, (n,n))
 
@@ -50,54 +62,83 @@ function stabilized_multiscale_bases(aₕ::Function, V::FESpace, domain::SVector
   ϕₘ = ϕ(ref_domain, n, N);
 
   # Multiscale Bases
-  β = multiscale_bases(aₕ, V, domain, n, N, l, p);    
+  β = multiscale_bases(aₕ, V, domain, n, N, l, p; show_progress=show_progress);    
   α = Vector{Vector{T}}(undef, N*N)
   
   elem_to_dof(i) = (p+1)^2*(i-1)+1:(p+1)^2*i
+
+  Λ = assemble_legendre_mass_matrix(domain, N, p)
   
-  @showprogress "Computing stabilized-pLOD bases" for K = 1:N*N
+  @showprogress enabled=show_progress "Computing stabilized-pLOD bases with [$(strategy |> typeof |> nameof)]" for K = 1:N*N
     sol = zeros(T, (n+1)*(n+1))   
-    
-    patch_1_cells = split_patch(patch_1[K])   
+    patch_1_cells = split_patch(patch_1[K])
 
-    ## Compute ιₖ
+    # Compute ιₖ
     iota_ref = ι(ref_domain, n, N, size(patch_1_cells))
-    iota = assemble_patch_vector(iota_ref, patch_1_fine[K], (n+1)*(n+1))    
+    iota = assemble_patch_vector(iota_ref, patch_1_fine[K], (n+1)*(n+1))
 
-    ## Compute Cˡιₖ
-    for j=1:lastindex(patch_1_cells)
-      patch_1_el = patch_1_cells[j]               
-      for i=1:lastindex(patch_1_el)
-        el = patch_1_el[i]
-        free_dofs_coarse = reduce(vcat, map(elem_to_dof, vec(patch_l_coarse[el])))        
-        lhs, free_dofs_fine = multiscale_lhs(stima, lmat, patch_l_coarse[el], patch_l_fine[el], p)         
-        K_el = assemble_patch_matrix(aₕ, V, elem_fine_nodes[el], elem_fine[el])              
-        rhs₁ = assemble_patch_vector(ϕₘ[i], elem_fine_nodes[el], (n+1)*(n+1))        
-        rhs₂ = zeros(length(free_dofs_coarse));
-        rhs = [(K_el*rhs₁)[free_dofs_fine]; rhs₂];        
-        sol[free_dofs_fine] += (lhs\rhs)[1:length(free_dofs_fine)];
+    # Compute ∫(v - Iₕv)μ dK    
+    C = lmat'*iota
+    Z = Λ[elem_to_dof(K)[1], :];    
+
+    if(strategy == DHM25())
+      # Compute Cˡιₖ
+      for j=1:lastindex(patch_1_cells)
+        patch_1_el = patch_1_cells[j]               
+        for i=1:lastindex(patch_1_el)
+          el = patch_1_el[i]
+          free_dofs_coarse = reduce(vcat, map(elem_to_dof, vec(patch_l_coarse[el])))        
+          lhs, free_dofs_fine = multiscale_lhs(stima, lmat, patch_l_coarse[el], patch_l_fine[el], p)         
+          K_el = assemble_patch_matrix(aₕ, V, elem_fine_nodes[el], elem_fine[el])              
+          rhs₁ = assemble_patch_vector(ϕₘ[i], elem_fine_nodes[el], (n+1)*(n+1))        
+          rhs₂ = zeros(length(free_dofs_coarse));
+          rhs = [(K_el*rhs₁)[free_dofs_fine]; rhs₂];        
+          sol[free_dofs_fine] += (lhs\rhs)[1:length(free_dofs_fine)];
+        end
       end
-    end
 
-    # Compute (1-Cˡ)ιₖ
-    sol = iota - sol;    
+      # Compute (1-Cˡ)νₖ
+      D = (Z - C)*2/hx*2/hy; 
+      Dₘ = reshape(D, (p+1)*(p+1), N*N)
+      sol1 = zeros(T, (n+1)*(n+1))
+      for i=1:lastindex(patch_1[K])  
+        el = patch_1[K][i]
+        sol1 += β[el]*Dₘ[:,el]
+      end       
 
-    # Compute (1-Cˡ)νₖ    
-    δ = 1/(length(patch_1[K]));    
-    C = 2/hx*2/hy*lmat'*iota
-    Z = zero(C)
-    Z[(p+1)^2*(K-1)+1] = 4; # ( = 2/hx*2/hy*λ(N,p)[1,1] );
-    D = reshape((Z - C)*δ, (p+1)*(p+1), N*N);        
-    sol1 = zeros(T, (n+1)*(n+1))
-    for i=1:lastindex(patch_1[K])  
-      el = patch_1[K][i]
-      sol1 += β[el]*D[:,el]
-    end    
+      # Compute (1-Cˡ)ιₖ
+      sol = iota - sol;
 
-    # (1-Cˡ)(ιₖ+νₖ)    
-    α[K] = sol + sol1;
+      # (1-Cˡ)(ιₖ+νₖ)    
+      α[K] = sol + sol1;      
+    elseif(strategy == HLM25())
+      elem_coarse = elements_in_coarse_scale_patch(reshape(1:N*N, N, N), N, 0);  
+      D = (Z - C)*(hx*hy);
+
+      # Compute 𝒦ˡvₕ
+      for j=1:lastindex(patch_1_cells)
+        patch_1_el = patch_1_cells[j]               
+        for i=1:lastindex(patch_1_el)
+          el = patch_1_el[i]
+          free_dofs_coarse = reduce(vcat, map(elem_to_dof, vec(patch_l_coarse[el])))
+          elem_dofs_coarse = reduce(vcat, map(elem_to_dof, vec(elem_coarse[el])))          
+          lhs, free_dofs_fine = multiscale_lhs(stima, lmat, patch_l_coarse[el], patch_l_fine[el], p)        
+          # RHS of Equation 1
+          K_el = assemble_patch_matrix(aₕ, V, elem_fine_nodes[el], elem_fine[el])
+          rhs₁ = assemble_patch_vector(ϕₘ[i], elem_fine_nodes[el], (n+1)*(n+1))                    
+          # RHS of Equation 2
+          rhs₂ = zeros(T, N*N*(p+1)*(p+1))
+          rhs₂[elem_dofs_coarse] = D[elem_dofs_coarse] 
+          rhs = [(K_el*rhs₁)[free_dofs_fine]; -rhs₂[free_dofs_coarse]];
+          sol[free_dofs_fine] += (lhs\rhs)[1:length(free_dofs_fine)];
+        end
+      end      
+
+      # Compute ιₖ - 𝒦ˡvₕ
+      sol = iota - sol;
+      α[K] = sol;   
+    end   
   end
-  
   # Assign the 0-th order basis to the new ones
   for i=1:N*N
     β[i][:,1] = α[i]
