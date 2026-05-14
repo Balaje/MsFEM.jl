@@ -143,12 +143,12 @@ e = uₑ - uₘₛ;
 using PrettyTables
 c_labels = ["1/h", "1/H", "p", "l", "j", "L²(spLOD, [$(stab_strategy |> typeof |> nameof)])", "Energy(spLOD, [$(stab_strategy |> typeof |> nameof)])"]
 d = ["$n" "$N" "$p" "$l" "$j" "$(√(∑(mₕ(e,e))))" "$(√(∑(aₕ(e,e))))"]
-
+tf = TextTableFormat(vertical_lines_at_data_columns=:none, vertical_line_at_beginning=false, vertical_line_after_data_columns=false)
 fname = parsed_args["output_file"]
 if(fname=="")
-  pretty_table(d; column_labels=c_labels)
+  pretty_table(d; column_labels=c_labels, table_format=tf, fit_table_in_display_horizontally=false)
 else
   open("wave2d-output-$fname.txt", "w") do io
-    pretty_table(io, d; column_labels=c_labels)
+    pretty_table(io, d; column_labels=c_labels, table_format=tf, fit_table_in_display_horizontally=false)
   end
 end

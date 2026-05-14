@@ -40,7 +40,7 @@ function additional_correction_bases(β::Vector{U}, ntimes::Int, aₕ::Function,
   @showprogress enabled=show_progress for j=1:ntimes
     βⱼ = ms_basis[j]
     solⱼ = Vector{U}(undef, N*N);    
-    @showprogress enabled=show_progress "Computing additional corrections bases [Level $j]" for i=1:N*N
+    @showprogress enabled=show_progress "Computing additional corrections bases (Level $j)" for i=1:N*N
       # Same LHS as the multiscale basis      
       lhs, I_p = multiscale_lhs(K, L, patch_coarse[i], patch_fine[i], p)
       J_p = reduce(vcat, map(elem_to_dof, vec(patch_coarse[i]))) # Coarse Scale patch dofs
